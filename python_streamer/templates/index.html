@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HoloLens Stream</title>
+    <style>
+        body { font-family: sans-serif; margin: 2em; background-color: #f4f4f4; color: #333; }
+        .container { max-width: 600px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        label, input { display: block; margin-bottom: 10px; }
+        input[type="text"] { width: calc(100% - 22px); padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 10px 15px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        img { display: block; margin-top: 20px; max-width: 100%; border: 1px solid #ddd; }
+        #stream-container { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>HoloLens Camera Stream (Python/Flask)</h1>
+        <form id="ip-form">
+            <label for="holo-ip">HoloLens IP Address:</label>
+            <input type="text" id="holo-ip" name="ip" required placeholder="e.g., 192.168.1.100">
+            <button type="submit">View Stream</button>
+        </form>
+
+        <div id="stream-container" style="display: none;">
+            <h2>Live Stream</h2>
+            <img id="stream-img" src="" alt="HoloLens Stream">
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('ip-form').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const ip = document.getElementById('holo-ip').value;
+            const streamUrl = `/stream?ip=${encodeURIComponent(ip)}`;
+            document.getElementById('stream-img').src = streamUrl;
+            document.getElementById('stream-container').style.display = 'block';
+        });
+    </script>
+</body>
+</html> 
