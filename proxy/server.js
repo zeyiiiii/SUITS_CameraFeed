@@ -1,44 +1,58 @@
+// proxy/server.js   (CommonJS version)
+require('dotenv').config();            // ← replace import line
 const express = require('express');
-const ffmpeg = require('fluent-ffmpeg');
+const cors    = require('cors');
+const ffmpeg  = require('fluent-ffmpeg');
 const { PassThrough } = require('stream');
 
 const app = express();
+app.use(cors());
+app.use(express.json());
 
+// ───── Config API (optional, for React setup page) ─────
+let config = { EV1_HOLO_IP: '', EV2_HOLO_IP: '' };
+
+app.get('/get_config', (_, res) => res.json(config));
+app.post('/set_config', (req, res) => {
+    const { EV1_HOLO_IP, EV2_HOLO_IP } = req.body;
+    if (EV1_HOLO_IP) config.EV1_HOLO_IP = EV1_HOLO_IP;
+    if (EV2_HOLO_IP) config.EV2_HOLO_IP = EV2_HOLO_IP;
+    res.json({ status: 'ok', config });
+});
+
+// ───── MJPEG endpoint ─────
 app.get('/stream', (req, res) => {
-    const holoIp = req.query.ip;
-    if (!holoIp) {
-        return res.status(400).send('Missing ?ip=<HOLO_IP>');
-    }
+    const ip = req.query.ip;
+    if (!ip) return res.status(400).send('Missing ?ip=');
 
-    // Tell the browser we’re doing MJPEG over HTTP:
     res.writeHead(200, {
         'Content-Type': 'multipart/x-mixed-replace; boundary=frame'
     });
 
-    // Create a passthrough for FFmpeg’s output
-    const stream = new PassThrough();
+    const b64 = Buffer
+        .from(`${process.env.HOLOLENS_USER}:${process.env.HOLOLENS_PASS}`)
+        .toString('base64');
 
-    ffmpeg(`http://${holoIp}/api/holographic/stream/live_high.mp4`)
-        .addInputOption('-re')               // read at native rate
-        .outputOptions('-f mjpeg')           // JPEG stream
-        .outputOptions('-q:v 5')             // quality level (1–31)
-        .on('start', cmd => console.log('FFmpeg:', cmd))
-        .on('error', err => console.error('FFmpeg error:', err))
-        .pipe(stream, { end: true });
+    const src = `https://${ip}:10443/api/holographic/stream/live_high.mp4`;
+    const pipe = new PassThrough();
 
-    // As FFmpeg spits out JPEG buffers, wrap them in the multipart boundary
-    stream.on('data', chunk => {
+    ffmpeg(src)
+        .addInputOption('-re')
+        .addInputOption('-headers', `Authorization: Basic ${b64}\r\n`)
+        .addInputOption('-tls_verify', '0')
+        .format('mjpeg')
+        .outputOptions(['-q:v', '5'])
+        .on('error', e => console.error('FFmpeg', e.message))
+        .pipe(pipe, { end: true });
+
+    pipe.on('data', buf => {
         res.write(
-            `--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${chunk.length}\r\n\r\n`
+            `--frame\r\nContent-Type:image/jpeg\r\nContent-Length:${buf.length}\r\n\r\n`
         );
-        res.write(chunk);
+        res.write(buf);
     });
-
-    // When the client disconnects, kill FFmpeg
-    res.on('close', () => {
-        stream.destroy();
-    });
+    res.on('close', () => pipe.destroy());
 });
 
 const PORT = process.env.PORT || 8000;
-app.listen(PORT, () => console.log(`MJPEG proxy listening on :${PORT}`));
+app.listen(PORT, () => console.log(`Proxy running at http://localhost:${PORT}`));

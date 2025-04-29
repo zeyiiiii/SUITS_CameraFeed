@@ -1,53 +1,83 @@
+// src/components/StreamComponent.jsx
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import NoVid from '../assets/Images/NoVid.png';
-import '../streamcomponent.css';
+import '../streamcomponent.css';   // you already have this
 
-const StreamComponent = ({ evNumber }) => {
-    const [isConnected, setIsConnected] = useState(true);
-    const [holoIp,      setHoloIp]      = useState(null);
+export default function StreamComponent() {
+    const [ev1, setEv1] = useState('');
+    const [ev2, setEv2] = useState('');
+    const [bad1, setBad1] = useState(false);
+    const [bad2, setBad2] = useState(false);
 
+    /* ─ fetch saved IPs once ─ */
     useEffect(() => {
         fetch('/get_config')
             .then(r => r.json())
-            .then(data => {
-                const ip = evNumber === 1 ? data.EV1_HOLO_IP : data.EV2_HOLO_IP;
-                setHoloIp(ip);
+            .then(cfg => {
+                setEv1(cfg.EV1_HOLO_IP?.trim() || '');
+                setEv2(cfg.EV2_HOLO_IP?.trim() || '');
             })
-            .catch(err => {
-                console.error('Config error', err);
-                setIsConnected(false);
+            .catch(() => {
+                setBad1(true);
+                setBad2(true);
             });
-    }, [evNumber]);
+    }, []);
 
-    if (!isConnected || !holoIp) {
+    /* ─ fallback when nothing configured ─ */
+    if (!ev1 && !ev2) {
         return (
             <div className="stream-container">
-                <h1>HoloLens Not Connected</h1>
+                <h1>No HoloLens IPs saved</h1>
                 <p>
-                    To see stream, input the HoloLens IP on the <Link to="/client/src/components/Setup">Setup</Link> page.
+                    Go to <Link to="/setup">Setup</Link> and enter one or both addresses.
                 </p>
-                <img
-                    src={NoVid}
-                    alt="No Stream"
-                    style={{ display: 'block', margin: '10px auto 0', width: 200, height: 200 }}
-                />
+                <img src={NoVid} alt="No feed" style={{ width: 240 }} />
             </div>
         );
     }
 
-    const proxyUrl = `/stream?ip=${holoIp}`;
+    /* helper – returns a <video> element */
+    const videoEl = (ip, idx) => (
+        <video
+            key={idx}
+            src={`https://${ip}/api/holographic/stream/live_high.mp4`}
+            autoPlay
+            playsInline
+            controls
+            muted
+            onError={() => (idx === 1 ? setBad1(true) : setBad2(true))}
+            className="stream-video"
+            style={{ width: '100%', maxWidth: 960 }}
+        />
+    );
 
+    /* choose which videos to show */
+    const videos = [];
+    if (ev1 && !bad1) videos.push(videoEl(ev1, 1));
+    if (ev2 && !bad2) videos.push(videoEl(ev2, 2));
+
+    if (videos.length === 0) {
+        return (
+            <div className="stream-container">
+                <h1>Stream unavailable</h1>
+                <p>Check that this browser session is logged in to Device Portal.</p>
+                <img src={NoVid} alt="No feed" style={{ width: 240 }} />
+            </div>
+        );
+    }
+
+    /* render one or two videos */
     return (
-        <div className="stream-container">
-            <img
-                className="stream-video"
-                src={proxyUrl}
-                alt="Live HoloLens feed"
-                onError={() => setIsConnected(false)}
-            />
+        <div
+            style={{
+                display: 'flex',
+                gap: '1rem',
+                justifyContent: 'center',
+                flexWrap: 'wrap'
+            }}
+        >
+            {videos}
         </div>
     );
-};
-
-export default StreamComponent;
+}
